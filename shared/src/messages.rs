@@ -1,4 +1,5 @@
 use bytes::{Buf, BufMut, BytesMut};
+use log::debug;
 use std::str;
 use tokio_util::codec::{Decoder, Encoder};
 
@@ -71,6 +72,7 @@ impl Decoder for MessageDecoder {
         // Get the message type and advance the buffer past the indicator
         let msg_type = src[0];
         src.advance(1);
+        debug!("msg_type: {:?}", msg_type);
         match msg_type {
             0x10 => {
                 let string = get_string(src);
@@ -310,6 +312,9 @@ impl Encoder<MessageType> for MessageEncoder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use futures::sink::SinkExt;
+    use tokio_stream::StreamExt;
+    use tokio_util::codec::{FramedRead, FramedWrite};
 
     #[tokio::test]
     async fn test_decode_error() {

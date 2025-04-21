@@ -4,6 +4,7 @@ use shared::network::Camera;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc::{self, Sender};
 use tokio::sync::oneshot;
+use tokio::task::JoinHandle;
 use tokio::time;
 use tokio_stream::StreamExt;
 use tokio_util::codec::{FramedRead, FramedWrite};
@@ -70,6 +71,7 @@ async fn handle_client(mut stream: TcpStream, manager_tx: Sender<ManagerCommand>
     let mut camera: Option<Camera> = None;
 
     let (heartbeat_tx, mut heartbeat_rx) = mpsc::channel::<String>(100);
+    let mut heartbeat_task: Option<JoinHandle<_>> = None;
 
     while client_type == ClientType::Unknown {
         tokio::select! {
@@ -89,9 +91,9 @@ async fn handle_client(mut stream: TcpStream, manager_tx: Sender<ManagerCommand>
                 }
                 MessageType::WantHeartbeat(i) => {
                     let tx = heartbeat_tx.clone();
-                    tokio::spawn(async move {
+                    heartbeat_task = Some(tokio::spawn(async move {
                         send_heartbeat(i as u64 * 100000000, tx).await;
-                    });
+                    }));
                 }
                 _ => {
                     let _ = writer
@@ -139,9 +141,9 @@ async fn handle_client(mut stream: TcpStream, manager_tx: Sender<ManagerCommand>
                             MessageType::WantHeartbeat(i) => {
                                 debug!("Received heartbeat request for interval {}", i);
                           let tx = heartbeat_tx.clone();
-                              tokio::spawn(async move {
+                          heartbeat_task = Some(tokio::spawn(async move {
                                 send_heartbeat(i as u64 * 100000000, tx).await;
-                          });
+                          }));
                             }
                             _ => {
                                 let _ = writer.send(MessageType::Error(String::from("Invalid message for Dispatcher"))).await;
@@ -178,7 +180,10 @@ async fn handle_client(mut stream: TcpStream, manager_tx: Sender<ManagerCommand>
                             }
                             MessageType::WantHeartbeat(i) => {
                                 debug!("Received heartbeat request for interval {}", i);
-                                send_heartbeat(i as u64 * 100000000, heartbeat_tx.clone()).await;
+                          let tx = heartbeat_tx.clone();
+                          heartbeat_task = Some(tokio::spawn(async move {
+                                send_heartbeat(i as u64 * 100000000, tx).await;
+                          }));
                             }
                             _ => {
                                 let _ = writer.send(MessageType::Error(String::from("Invalid message for Camera"))).await;
@@ -193,5 +198,8 @@ async fn handle_client(mut stream: TcpStream, manager_tx: Sender<ManagerCommand>
                 }
             }
         }
+    }
+    if let Some(t) = heartbeat_task {
+        t.abort();
     }
 }

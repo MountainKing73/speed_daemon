@@ -69,10 +69,15 @@ async fn handle_client(mut stream: TcpStream, manager_tx: Sender<ManagerCommand>
     let mut dispatcher_roads: Vec<u16> = vec![];
     let mut camera: Option<Camera> = None;
 
-    while client_type == ClientType::Unknown {
-        let message = reader.next().await;
+    let (heartbeat_tx, mut heartbeat_rx) = mpsc::channel::<String>(100);
 
-        match message {
+    while client_type == ClientType::Unknown {
+        tokio::select! {
+            Some(_) = heartbeat_rx.recv() => {
+                println!("Got heartbeak signal");
+                    let _=  writer.send(MessageType::HeartBeat).await;
+            }
+            result = reader.next() => match result {
             Some(Ok(msg)) => match msg {
                 MessageType::IAmDispatcher(v) => {
                     client_type = ClientType::Dispatcher;
@@ -81,6 +86,12 @@ async fn handle_client(mut stream: TcpStream, manager_tx: Sender<ManagerCommand>
                 MessageType::IAmCamera(c) => {
                     client_type = ClientType::Camera;
                     camera = Some(c);
+                }
+                MessageType::WantHeartbeat(i) => {
+                    let tx = heartbeat_tx.clone();
+                    tokio::spawn(async move {
+                        send_heartbeat(i as u64 * 100000000, tx).await;
+                    });
                 }
                 _ => {
                     let _ = writer
@@ -93,9 +104,8 @@ async fn handle_client(mut stream: TcpStream, manager_tx: Sender<ManagerCommand>
             Some(Err(e)) => error!("Error reading message {}", e),
             None => break,
         }
+        }
     }
-
-    let (heartbeat_tx, mut heartbeat_rx) = mpsc::channel::<String>(100);
 
     if client_type == ClientType::Dispatcher {
         let (dispatcher_tx, mut dispatcher_rx) = mpsc::channel::<Ticket>(100);
@@ -131,7 +141,6 @@ async fn handle_client(mut stream: TcpStream, manager_tx: Sender<ManagerCommand>
                           let tx = heartbeat_tx.clone();
                               tokio::spawn(async move {
                                 send_heartbeat(i as u64 * 100000000, tx).await;
-
                           });
                             }
                             _ => {

@@ -69,10 +69,10 @@ impl Decoder for MessageDecoder {
             return Ok(None);
         }
 
+        debug!("msg: {:?}", src);
         // Get the message type and advance the buffer past the indicator
         let msg_type = src[0];
         src.advance(1);
-        debug!("msg_type: {:?}", msg_type);
         match msg_type {
             0x10 => {
                 let string = get_string(src);

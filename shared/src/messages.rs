@@ -16,7 +16,7 @@ pub enum MessageType {
     IAmDispatcher(Vec<u16>),
 }
 
-fn get_string(src: &mut BytesMut) -> Result<Option<String>, std::io::Error> {
+fn get_string(src: &[u8]) -> Result<Option<(String, usize)>, std::io::Error> {
     let str_end = src[0] as usize + 1;
     if src.len() < str_end {
         return Ok(None);
@@ -27,12 +27,12 @@ fn get_string(src: &mut BytesMut) -> Result<Option<String>, std::io::Error> {
         Err(e) => return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, e)),
     };
     let result = s.to_string();
-    src.advance(str_end);
 
-    Ok(Some(result))
+    let length = result.len() + 1;
+    Ok(Some((result, length)))
 }
 
-fn get_u32(src: &mut BytesMut) -> Result<Option<u32>, std::io::Error> {
+fn get_u32(src: &[u8]) -> Result<Option<u32>, std::io::Error> {
     if src.len() < 4 {
         return Ok(None);
     }
@@ -41,11 +41,11 @@ fn get_u32(src: &mut BytesMut) -> Result<Option<u32>, std::io::Error> {
         Ok(n) => n,
         Err(e) => return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, e)),
     };
-    src.advance(4);
+
     Ok(Some(u32::from_be_bytes(num_bytes)))
 }
 
-fn get_u16(src: &mut BytesMut) -> Result<Option<u16>, std::io::Error> {
+fn get_u16(src: &[u8]) -> Result<Option<u16>, std::io::Error> {
     if src.len() < 2 {
         return Ok(None);
     }
@@ -54,7 +54,7 @@ fn get_u16(src: &mut BytesMut) -> Result<Option<u16>, std::io::Error> {
         Ok(n) => n,
         Err(e) => return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, e)),
     };
-    src.advance(2);
+    //src.advance(2);
     Ok(Some(u16::from_be_bytes(num_bytes)))
 }
 
@@ -69,101 +69,138 @@ impl Decoder for MessageDecoder {
             return Ok(None);
         }
 
+        let mut pos = 0;
+
         debug!("msg: {:?}", src);
         // Get the message type and advance the buffer past the indicator
         let msg_type = src[0];
-        src.advance(1);
+        // Need to redo this to not do any advancing until we confirm message is complete
+        //src.advance(1);
+        pos += 1;
         match msg_type {
             0x10 => {
-                let string = get_string(src);
-                match string {
+                let res = get_string(&src[pos..]);
+                match res {
                     Ok(result) => match result {
-                        Some(s) => Ok(Some(MessageType::Error(s))),
+                        Some((s, len)) => {
+                            src.advance(pos + len);
+                            Ok(Some(MessageType::Error(s)))
+                        }
                         None => Ok(None),
                     },
                     Err(e) => Err(e),
                 }
             }
             0x20 => {
-                let string = get_string(src);
-                let plate_string = match string {
+                let res = get_string(&src[pos..]);
+                let plate_string = match res {
                     Ok(result) => match result {
-                        Some(s) => s,
+                        Some((s, len)) => {
+                            pos += len;
+                            s
+                        }
                         None => return Ok(None),
                     },
                     Err(e) => return Err(e),
                 };
 
-                let num = get_u32(src);
-                let timestamp = match num {
-                    Ok(result) => match result {
-                        Some(n) => n,
+                let res = get_u32(&src[pos..]);
+                let timestamp = match res {
+                    Ok(num) => match num {
+                        Some(n) => {
+                            pos += 4;
+                            n
+                        }
                         None => return Ok(None),
                     },
                     Err(e) => return Err(e),
                 };
 
+                src.advance(pos);
                 Ok(Some(MessageType::Plate(plate_string, timestamp)))
             }
             0x21 => {
-                let string = get_string(src);
+                let string = get_string(&src[pos..]);
                 let plate_string = match string {
                     Ok(result) => match result {
-                        Some(s) => s,
+                        Some((s, len)) => {
+                            pos += len;
+                            s
+                        }
                         None => return Ok(None),
                     },
                     Err(e) => return Err(e),
                 };
 
-                let num = get_u16(src);
+                let num = get_u16(&src[pos..]);
                 let road = match num {
                     Ok(result) => match result {
-                        Some(n) => n,
+                        Some(n) => {
+                            pos += 2;
+                            n
+                        }
                         None => return Ok(None),
                     },
                     Err(e) => return Err(e),
                 };
 
-                let num = get_u16(src);
+                let num = get_u16(&src[pos..]);
                 let mile1 = match num {
                     Ok(result) => match result {
-                        Some(n) => n,
+                        Some(n) => {
+                            pos += 2;
+                            n
+                        }
                         None => return Ok(None),
                     },
                     Err(e) => return Err(e),
                 };
-                let num = get_u32(src);
+                let num = get_u32(&src[pos..]);
                 let timestamp1 = match num {
                     Ok(result) => match result {
-                        Some(n) => n,
+                        Some(n) => {
+                            pos += 4;
+                            n
+                        }
                         None => return Ok(None),
                     },
                     Err(e) => return Err(e),
                 };
-                let num = get_u16(src);
+                let num = get_u16(&src[pos..]);
                 let mile2 = match num {
                     Ok(result) => match result {
-                        Some(n) => n,
+                        Some(n) => {
+                            pos += 2;
+                            n
+                        }
                         None => return Ok(None),
                     },
                     Err(e) => return Err(e),
                 };
-                let num = get_u32(src);
+                let num = get_u32(&src[pos..]);
                 let timestamp2 = match num {
                     Ok(result) => match result {
-                        Some(n) => n,
+                        Some(n) => {
+                            pos += 4;
+                            n
+                        }
                         None => return Ok(None),
                     },
                     Err(e) => return Err(e),
                 };
-                let num = get_u16(src);
+                let num = get_u16(&src[pos..]);
                 let speed = match num {
                     Ok(result) => match result {
-                        Some(n) => n,
+                        Some(n) => {
+                            pos += 2;
+                            n
+                        }
                         None => return Ok(None),
                     },
                     Err(e) => return Err(e),
                 };
+
+                src.advance(pos);
                 Ok(Some(MessageType::Ticket(Ticket {
                     plate: plate_string,
                     road,
@@ -175,7 +212,7 @@ impl Decoder for MessageDecoder {
                 })))
             }
             0x40 => {
-                let num = get_u32(src);
+                let num = get_u32(&src[pos..]);
                 let interval = match num {
                     Ok(result) => match result {
                         Some(n) => n,
@@ -184,50 +221,64 @@ impl Decoder for MessageDecoder {
                     Err(e) => return Err(e),
                 };
 
+                src.advance(pos + 4);
                 Ok(Some(MessageType::WantHeartbeat(interval)))
             }
             0x41 => Ok(Some(MessageType::HeartBeat)),
             0x80 => {
-                let num = get_u16(src);
+                let num = get_u16(&src[pos..]);
                 let road = match num {
                     Ok(result) => match result {
-                        Some(n) => n,
+                        Some(n) => {
+                            pos += 2;
+                            n
+                        }
                         None => return Ok(None),
                     },
                     Err(e) => return Err(e),
                 };
 
-                let num = get_u16(src);
+                let num = get_u16(&src[pos..]);
                 let mile = match num {
                     Ok(result) => match result {
-                        Some(n) => n,
+                        Some(n) => {
+                            pos += 2;
+                            n
+                        }
                         None => return Ok(None),
                     },
                     Err(e) => return Err(e),
                 };
 
-                let num = get_u16(src);
+                let num = get_u16(&src[pos..]);
                 let limit = match num {
                     Ok(result) => match result {
-                        Some(n) => n,
+                        Some(n) => {
+                            pos += 2;
+                            n
+                        }
                         None => return Ok(None),
                     },
                     Err(e) => return Err(e),
                 };
 
+                src.advance(pos);
                 Ok(Some(MessageType::IAmCamera(Camera { road, mile, limit })))
             }
             0x81 => {
-                let num_roads = src[0];
-                src.advance(1);
+                let num_roads = src[pos];
+                pos += 1;
 
                 let mut roads: Vec<u16> = vec![];
 
                 for _ in 0..num_roads {
-                    let num = get_u16(src);
+                    let num = get_u16(&src[pos..]);
                     let road = match num {
                         Ok(result) => match result {
-                            Some(n) => n,
+                            Some(n) => {
+                                pos += 2;
+                                n
+                            }
                             None => return Ok(None),
                         },
                         Err(e) => return Err(e),
@@ -236,6 +287,7 @@ impl Decoder for MessageDecoder {
                     roads.push(road);
                 }
 
+                src.advance(pos);
                 Ok(Some(MessageType::IAmDispatcher(roads)))
             }
             m => unimplemented!("Message Type not implemented: {}", m),
@@ -313,6 +365,8 @@ impl Encoder<MessageType> for MessageEncoder {
 mod tests {
     use super::*;
     use futures::sink::SinkExt;
+    use tokio::io::AsyncWriteExt;
+    use tokio::io::duplex;
     use tokio_stream::StreamExt;
     use tokio_util::codec::{FramedRead, FramedWrite};
 
@@ -322,6 +376,25 @@ mod tests {
         let msg: [u8; 5] = [0x10, 0x03, 0x62, 0x61, 0x64];
 
         let mut reader = FramedRead::new(&msg[..], decoder);
+
+        let frame = reader.next().await.unwrap().unwrap();
+        assert_eq!(frame, MessageType::Error(String::from("bad")));
+    }
+
+    #[tokio::test]
+    async fn test_decode_error_partial_frame() {
+        let (mut writer, reader) = duplex(64);
+        let msg: [u8; 5] = [0x10, 0x03, 0x62, 0x61, 0x64];
+
+        let decoder = MessageDecoder {};
+        let mut reader = FramedRead::new(reader, decoder);
+
+        // Simulate partial frame
+        tokio::spawn(async move {
+            writer.write_all(&msg[0..2]).await.unwrap();
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            writer.write_all(&msg[2..]).await.unwrap();
+        });
 
         let frame = reader.next().await.unwrap().unwrap();
         assert_eq!(frame, MessageType::Error(String::from("bad")));
@@ -342,6 +415,28 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_decode_plate_partial_frame() {
+        let (mut writer, reader) = duplex(64);
+        let msg: [u8; 13] = [
+            0x20, 0x07, 0x52, 0x45, 0x30, 0x35, 0x42, 0x4b, 0x47, 0x00, 0x01, 0xe2, 0x40,
+        ];
+
+        let decoder = MessageDecoder {};
+        let mut reader = FramedRead::new(reader, decoder);
+
+        // Simulate partial frame
+        tokio::spawn(async move {
+            writer.write_all(&msg[0..2]).await.unwrap();
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            writer.write_all(&msg[2..]).await.unwrap();
+        });
+
+        let frame = reader.next().await.unwrap().unwrap();
+
+        assert_eq!(frame, MessageType::Plate(String::from("RE05BKG"), 123456,));
+    }
+
+    #[tokio::test]
     async fn test_decode_ticket() {
         let decoder = MessageDecoder {};
         let msg: [u8; 25] = [
@@ -350,6 +445,40 @@ mod tests {
         ];
 
         let mut reader = FramedRead::new(&msg[..], decoder);
+
+        let frame = reader.next().await.unwrap().unwrap();
+
+        assert_eq!(
+            frame,
+            MessageType::Ticket(Ticket {
+                plate: String::from("RE05BKG"),
+                road: 368,
+                mile1: 1234,
+                timestamp1: 1000000,
+                mile2: 1235,
+                timestamp2: 1000060,
+                speed: 6000,
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn test_decode_ticket_partial_frame() {
+        let (mut writer, reader) = duplex(64);
+        let msg: [u8; 25] = [
+            0x21, 0x07, 0x52, 0x45, 0x30, 0x35, 0x42, 0x4b, 0x47, 0x01, 0x70, 0x04, 0xd2, 0x00,
+            0x0f, 0x42, 0x40, 0x04, 0xd3, 0x00, 0x0f, 0x42, 0x7c, 0x17, 0x70,
+        ];
+
+        let decoder = MessageDecoder {};
+        let mut reader = FramedRead::new(reader, decoder);
+
+        // Simulate partial frame
+        tokio::spawn(async move {
+            writer.write_all(&msg[0..10]).await.unwrap();
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            writer.write_all(&msg[10..]).await.unwrap();
+        });
 
         let frame = reader.next().await.unwrap().unwrap();
 
@@ -411,6 +540,32 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_decode_iamcamera_partial_frame() {
+        let (mut writer, reader) = duplex(64);
+        let msg: [u8; 7] = [0x80, 0x00, 0x42, 0x00, 0x64, 0x00, 0x3c];
+
+        let decoder = MessageDecoder {};
+        let mut reader = FramedRead::new(reader, decoder);
+
+        // Simulate partial frame
+        tokio::spawn(async move {
+            writer.write_all(&msg[0..4]).await.unwrap();
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            writer.write_all(&msg[4..]).await.unwrap();
+        });
+
+        let frame = reader.next().await.unwrap().unwrap();
+        assert_eq!(
+            frame,
+            MessageType::IAmCamera(Camera {
+                road: 66,
+                mile: 100,
+                limit: 60
+            })
+        );
+    }
+
+    #[tokio::test]
     async fn test_decode_iamdispatcher() {
         let decoder = MessageDecoder {};
         let msg: [u8; 8] = [0x81, 0x03, 0x00, 0x42, 0x01, 0x70, 0x13, 0x88];
@@ -419,6 +574,25 @@ mod tests {
 
         let frame = reader.next().await.unwrap().unwrap();
 
+        assert_eq!(frame, MessageType::IAmDispatcher(vec![66, 368, 5000]));
+    }
+
+    #[tokio::test]
+    async fn test_decode_iamdispatcher_partial_frame() {
+        let (mut writer, reader) = duplex(64);
+        let msg: [u8; 8] = [0x81, 0x03, 0x00, 0x42, 0x01, 0x70, 0x13, 0x88];
+
+        let decoder = MessageDecoder {};
+        let mut reader = FramedRead::new(reader, decoder);
+
+        // Simulate partial frame
+        tokio::spawn(async move {
+            writer.write_all(&msg[0..2]).await.unwrap();
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            writer.write_all(&msg[2..]).await.unwrap();
+        });
+
+        let frame = reader.next().await.unwrap().unwrap();
         assert_eq!(frame, MessageType::IAmDispatcher(vec![66, 368, 5000]));
     }
 

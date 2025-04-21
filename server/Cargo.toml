@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 shared = { path = "../shared" }
 tokio = { version = "1.44.1", features = [
+  "io-util",
   "macros",
   "net",
   "rt",

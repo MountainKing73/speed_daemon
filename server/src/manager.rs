@@ -65,7 +65,7 @@ async fn ticket_manager(mut rx: Receiver<TicketMgrCommand>) {
                 // 3. send ticket to dispatcher for each day that hasn't been ticketed
                 // 4. if no dispatcher, add to queue
                 // 5. add ticket to history
-                let day = (ticket.timestamp1 as f64 / 86400.0).floor() as u32;
+                let day = (ticket.timestamp2 as f64 / 86400.0).floor() as u32;
                 //let day2 = (ticket.timestamp2 as f64 / 86400.0).floor() as u32;
                 //for day in day1..day2 + 1 {
                 if !ticket_history.contains(&(ticket.plate.clone(), day)) {

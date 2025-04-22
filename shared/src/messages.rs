@@ -224,7 +224,10 @@ impl Decoder for MessageDecoder {
                 src.advance(pos + 4);
                 Ok(Some(MessageType::WantHeartbeat(interval)))
             }
-            0x41 => Ok(Some(MessageType::HeartBeat)),
+            0x41 => {
+                src.advance(pos);
+                Ok(Some(MessageType::HeartBeat))
+            }
             0x80 => {
                 let num = get_u16(&src[pos..]);
                 let road = match num {

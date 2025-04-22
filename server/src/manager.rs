@@ -81,6 +81,7 @@ async fn ticket_manager(mut rx: Receiver<TicketMgrCommand>) {
                             }
                         }
                         if !sent {
+                            debug!("adding ticket to queue to send later");
                             let queue = ticket_queue.entry(ticket.road).or_default();
                             queue.push(ticket.clone());
                         }
@@ -144,6 +145,7 @@ pub async fn manager(mut rx: Receiver<ManagerCommand>) {
                                     mem::swap(&mut timestamp1, &mut timestamp2);
                                     mem::swap(&mut mile1, &mut mile2);
                                 }
+                                debug!("Found speeding car");
                                 let _ = ticket_mgr_tx
                                     .send(TicketMgrCommand::Ticket(Ticket {
                                         plate: plate.clone(),

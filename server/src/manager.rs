@@ -65,29 +65,29 @@ async fn ticket_manager(mut rx: Receiver<TicketMgrCommand>) {
                 // 3. send ticket to dispatcher for each day that hasn't been ticketed
                 // 4. if no dispatcher, add to queue
                 // 5. add ticket to history
-                let day1 = (ticket.timestamp1 as f64 / 86400.0).floor() as u32;
-                let day2 = (ticket.timestamp2 as f64 / 86400.0).floor() as u32;
-                for day in day1..day2 + 1 {
-                    if !ticket_history.contains(&(ticket.plate.clone(), day)) {
-                        println!("Send ticket");
-                        let plate = ticket.plate.clone();
-                        let mut sent = false;
-                        for dispatcher in dispatchers.values() {
-                            if dispatcher.roads.contains(&ticket.road) {
-                                debug!("Found dispatcher to send ticket");
-                                let _ = dispatcher.tx.send(ticket.clone()).await;
-                                sent = true;
-                                break;
-                            }
+                let day = (ticket.timestamp1 as f64 / 86400.0).floor() as u32;
+                //let day2 = (ticket.timestamp2 as f64 / 86400.0).floor() as u32;
+                //for day in day1..day2 + 1 {
+                if !ticket_history.contains(&(ticket.plate.clone(), day)) {
+                    println!("Send ticket");
+                    let plate = ticket.plate.clone();
+                    let mut sent = false;
+                    for dispatcher in dispatchers.values() {
+                        if dispatcher.roads.contains(&ticket.road) {
+                            debug!("Found dispatcher to send ticket");
+                            let _ = dispatcher.tx.send(ticket.clone()).await;
+                            sent = true;
+                            break;
                         }
-                        if !sent {
-                            debug!("adding ticket to queue to send later");
-                            let queue = ticket_queue.entry(ticket.road).or_default();
-                            queue.push(ticket.clone());
-                        }
-                        ticket_history.push((plate, day));
                     }
+                    if !sent {
+                        debug!("adding ticket to queue to send later");
+                        let queue = ticket_queue.entry(ticket.road).or_default();
+                        queue.push(ticket.clone());
+                    }
+                    ticket_history.push((plate, day));
                 }
+                //}
             }
             TicketMgrCommand::Disconnect(id) => {
                 dispatchers.remove(&id);

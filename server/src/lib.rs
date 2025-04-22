@@ -18,9 +18,8 @@ use shared::{
 
 use crate::manager::{ManagerCommand, manager};
 
-pub async fn run() {
-    env_logger::init();
-    let listener = TcpListener::bind("0.0.0.0:8080").await.unwrap();
+pub async fn run(addr: &str) {
+    let listener = TcpListener::bind(addr).await.unwrap();
     info!("Listening on port 8080");
 
     let (manager_tx, manager_rx) = mpsc::channel::<ManagerCommand>(100);

@@ -60,15 +60,15 @@ async fn ticket_manager(mut rx: Receiver<TicketMgrCommand>) {
                 }
             }
             TicketMgrCommand::Ticket(ticket) => {
-                // 1. get days that the ticket covers - done
-                // 2. check if car has been ticketed for each day - done
-                // 3. send ticket to dispatcher for each day that hasn't been ticketed
-                // 4. if no dispatcher, add to queue
-                // 5. add ticket to history
-                let day = (ticket.timestamp2 as f64 / 86400.0).floor() as u32;
-                //let day2 = (ticket.timestamp2 as f64 / 86400.0).floor() as u32;
+                // If ticket spans multiple days, then the ticket applies to all days,
+                // so history will need to be created for each and the history check will
+                // need to span all of the days that the ticket is for
+                let day1 = (ticket.timestamp1 as f64 / 86400.0).floor() as u32;
+                let day2 = (ticket.timestamp2 as f64 / 86400.0).floor() as u32;
                 //for day in day1..day2 + 1 {
-                if !ticket_history.contains(&(ticket.plate.clone(), day)) {
+                if !ticket_history.contains(&(ticket.plate.clone(), day1))
+                    && !ticket_history.contains(&(ticket.plate.clone(), day2))
+                {
                     println!("Send ticket");
                     let plate = ticket.plate.clone();
                     let mut sent = false;
@@ -85,7 +85,9 @@ async fn ticket_manager(mut rx: Receiver<TicketMgrCommand>) {
                         let queue = ticket_queue.entry(ticket.road).or_default();
                         queue.push(ticket.clone());
                     }
-                    ticket_history.push((plate, day));
+                    for day in day1..day2 + 1 {
+                        ticket_history.push((plate.clone(), day));
+                    }
                 }
                 //}
             }

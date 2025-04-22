@@ -293,7 +293,10 @@ impl Decoder for MessageDecoder {
                 src.advance(pos);
                 Ok(Some(MessageType::IAmDispatcher(roads)))
             }
-            m => unimplemented!("Message Type not implemented: {}", m),
+            m => {
+                let msg = format!("Message Type not implemented: {}", m);
+                Ok(Some(MessageType::Error(msg)))
+            }
         }
     }
 }
